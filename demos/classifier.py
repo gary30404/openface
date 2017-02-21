@@ -184,6 +184,14 @@ def infer(args, multiple=False):
             bbx = r[0]
             start = time.time()
             predictions = clf.predict_proba(rep).ravel()
+            # for building confusion matrix
+            for i in range(len(predictions)):
+                maxI = np.argmax(predictions)
+                person = le.inverse_transform(maxI)
+                confidence = predictions[maxI]
+                predictions[maxI] = 0
+                print("Predict {} with {:.2f} confidence.".format(person, confidence))
+            '''
             maxI = np.argmax(predictions)
             person = le.inverse_transform(maxI)
             confidence = predictions[maxI]
@@ -197,7 +205,7 @@ def infer(args, multiple=False):
             if isinstance(clf, GMM):
                 dist = np.linalg.norm(rep - clf.means_[maxI])
                 print("  + Distance from the mean: {}".format(dist))
-
+            '''
 
 if __name__ == '__main__':
 
