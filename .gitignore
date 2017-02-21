@@ -1,3 +1,5 @@
+*.DS_Store
+
 build
 _build
 plots
@@ -28,3 +30,5 @@ models/openface/*.pkl
 celeb-classifier*
 
 site
+
+
