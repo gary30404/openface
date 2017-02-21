@@ -112,7 +112,7 @@ def train(args):
     labelsNum = le.transform(labels)
     nClasses = len(le.classes_)
     print("Training for {} classes.".format(nClasses))
-
+    print(args.classifier)
     if args.classifier == 'LinearSvm':
         clf = SVC(C=1, kernel='linear', probability=True)
     elif args.classifier == 'GridSearchSvm':
@@ -186,11 +186,8 @@ def infer(args, multiple=False):
             predictions = clf.predict_proba(rep).ravel()
             # for building confusion matrix
             for i in range(len(predictions)):
-                maxI = np.argmax(predictions)
-                person = le.inverse_transform(maxI)
-                confidence = predictions[maxI]
-                predictions[maxI] = 0
-                print("Predict {} with {:.2f} confidence.".format(person, confidence))
+                person = le.inverse_transform(i)
+                print("Predict {} with {:.2f} confidence.".format(person, predictions[i]))
             '''
             maxI = np.argmax(predictions)
             person = le.inverse_transform(maxI)
@@ -246,7 +243,7 @@ if __name__ == '__main__':
             'GaussianNB',
             'DBN'],
         help='The type of classifier to use.',
-        default='LinearSvm')
+        default='GridSearchSvm')
     trainParser.add_argument(
         'workDir',
         type=str,
