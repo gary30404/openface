@@ -37,7 +37,7 @@ import os
 import StringIO
 import urllib
 import base64
-
+import pickle
 from sklearn.decomposition import PCA
 from sklearn.grid_search import GridSearchCV
 from sklearn.manifold import TSNE
@@ -66,7 +66,8 @@ parser.add_argument('--unknown', type=bool, default=False,
                     help='Try to predict unknown people')
 parser.add_argument('--port', type=int, default=9000,
                     help='WebSocket Port')
-
+parser.add_argument('--classifierModel', type=str, default='/Users/gary/feature-directory2/classifier.pkl',
+                    help='The Python pickle representing the classifier. This is NOT the Torch network model, which can be set with --networkModel.')
 args = parser.parse_args()
 
 align = openface.AlignDlib(args.dlibFacePredictor)
@@ -93,7 +94,11 @@ class OpenFaceServerProtocol(WebSocketServerProtocol):
         self.images = {}
         self.training = True
         self.people = []
-        self.svm = None
+        #self.svm = None
+        print('read model')
+        with open(args.classifierModel, 'r') as f:
+            (self.le, self.clf) = pickle.load(f)
+
         if args.unknown:
             self.unknownImgs = np.load("./examples/web/unknown.npy")
 
@@ -283,6 +288,8 @@ class OpenFaceServerProtocol(WebSocketServerProtocol):
             else:
                 rep = net.forward(alignedFace)
                 # print(rep)
+                # real time train
+                '''
                 if self.training:
                     self.images[phash] = Face(rep, identity)
                     # TODO: Transferring as a string is suboptimal.
@@ -309,7 +316,15 @@ class OpenFaceServerProtocol(WebSocketServerProtocol):
                         identity = -1
                     if identity not in identities:
                         identities.append(identity)
-
+                '''
+                #read model
+                rep = rep.reshape(1, -1)
+                print(rep.shape)
+                predictions = self.clf.predict_proba(rep).ravel()
+                maxI = np.argmax(predictions)
+                person = self.le.inverse_transform(maxI)
+                confidence = predictions[maxI]
+                print("Predict {} with {:.2f} confidence.".format(person, confidence))
             if not self.training:
                 bl = (bb.left(), bb.bottom())
                 tr = (bb.right(), bb.top())
@@ -318,14 +333,21 @@ class OpenFaceServerProtocol(WebSocketServerProtocol):
                 for p in openface.AlignDlib.OUTER_EYES_AND_NOSE:
                     cv2.circle(annotatedFrame, center=landmarks[p], radius=3,
                                color=(102, 204, 255), thickness=-1)
+                '''
                 if identity == -1:
                     if len(self.people) == 1:
                         name = self.people[0]
                     else:
                         name = "Unknown"
                 else:
-                    name = self.people[identity]
-                cv2.putText(annotatedFrame, name, (bb.left(), bb.top() - 10),
+                    #name = self.people[identity]
+                '''
+                # set threshold
+                if confidence < .89:
+                    person = 'Unknown'
+                else:
+                    person = person + "{:.5f}".format(confidence)
+                cv2.putText(annotatedFrame, person, (bb.left(), bb.top() - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.75,
                             color=(152, 255, 204), thickness=2)
 
