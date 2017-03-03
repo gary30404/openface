@@ -110,6 +110,10 @@ def train(args):
     embeddings = pd.read_csv(fname, header=None).as_matrix()
     le = LabelEncoder().fit(labels)
     labelsNum = le.transform(labels)
+    print('xxx')
+    print(labelsNum)
+    print(labelsNum.shape)
+    print(labelsNum[-1:][0] + 1)
     nClasses = len(le.classes_)
     print("Training for {} classes.".format(nClasses))
     print(args.classifier)
@@ -145,17 +149,18 @@ def train(args):
     # ref: https://jessesw.com/Deep-Learning/
     elif args.classifier == 'DBN':
         from nolearn.dbn import DBN
-        clf = DBN([embeddings.shape[1], 500, labelsNum[-1:][0] + 1],  # i/p nodes, hidden nodes, o/p nodes
-                  learn_rates=0.3,
+        clf = DBN([embeddings.shape[1], 1000, labelsNum[-1:][0] + 1],  # i/p nodes, hidden nodes, o/p nodes
+                  learn_rates=0.5,
                   # Smaller steps mean a possibly more accurate result, but the
                   # training will take longer
                   learn_rate_decays=0.9,
                   # a factor the initial learning rate will be multiplied by
                   # after each iteration of the training
-                  epochs=300,  # no of iternation
-                  # dropouts = 0.25, # Express the percentage of nodes that
+                  epochs=2000,  # no of iternation
+                  dropouts = 0.1, # Express the percentage of nodes that
                   # will be randomly dropped as a decimal.
                   verbose=1)
+                  #minibatch_size=1)
 
     if args.ldaDim > 0:
         clf_final = clf
@@ -243,7 +248,7 @@ if __name__ == '__main__':
             'GaussianNB',
             'DBN'],
         help='The type of classifier to use.',
-        default='GridSearchSvm')
+        default='DBN')
     trainParser.add_argument(
         'workDir',
         type=str,

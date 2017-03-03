@@ -66,7 +66,7 @@ parser.add_argument('--unknown', type=bool, default=False,
                     help='Try to predict unknown people')
 parser.add_argument('--port', type=int, default=9000,
                     help='WebSocket Port')
-parser.add_argument('--classifierModel', type=str, default='/Users/gary/feature-directory2/classifier.pkl',
+parser.add_argument('--classifierModel', type=str, default='/Users/gary/openface/demos/web/data/feature-directory/classifier.pkl',
                     help='The Python pickle representing the classifier. This is NOT the Torch network model, which can be set with --networkModel.')
 args = parser.parse_args()
 
@@ -234,18 +234,29 @@ class OpenFaceServerProtocol(WebSocketServerProtocol):
             return
         else:
             (X, y) = d
-            numIdentities = len(set(y + [-1]))
-            if numIdentities <= 1:
-                return
+            numIdentities = len(set(y + [-1])) # how much label
+            if numIdentities <= 1:	return
 
-            param_grid = [
-                {'C': [1, 10, 100, 1000],
-                 'kernel': ['linear']},
-                {'C': [1, 10, 100, 1000],
-                 'gamma': [0.001, 0.0001],
-                 'kernel': ['rbf']}
-            ]
-            self.svm = GridSearchCV(SVC(C=1), param_grid, cv=5).fit(X, y)
+            #param_grid = [
+            #    {'C': [1, 10, 100, 1000],
+            #     'kernel': ['linear']},
+            #    {'C': [1, 10, 100, 1000],
+            #     'gamma': [0.001, 0.0001],
+            #     'kernel': ['rbf']}
+            #]
+            #self.svm = GridSearchCV(SVC(C=1), param_grid, cv=5).fit(X, y)
+            from nolearn.dbn import DBN
+            self.svm = DBN([X.shape[1], 500, y[-1:][0] + 1],
+            			learn_rates=0.5,
+                  		# Smaller steps mean a possibly more accurate result, but the
+                  		# training will take longer
+                  		learn_rate_decays=0.9,
+                  		# a factor the initial learning rate will be multiplied by
+                  		# after each iteration of the training
+                  		epochs=2000,  # no of iternation
+                  		dropouts = 0.1, # Express the percentage of nodes that
+                  		# will be randomly dropped as a decimal.
+                  		verbose=1).fit(X, y)
 
     def processFrame(self, dataURL, identity):
         head = "data:image/jpeg;base64,"
@@ -261,6 +272,12 @@ class OpenFaceServerProtocol(WebSocketServerProtocol):
         rgbFrame[:, :, 0] = buf[:, :, 2]
         rgbFrame[:, :, 1] = buf[:, :, 1]
         rgbFrame[:, :, 2] = buf[:, :, 0]
+
+        # brightness
+        hsv = cv2.cvtColor(rgbFrame, cv2.COLOR_BGR2HSV)
+        v = hsv[:,:,2]
+        mean = np.mean(v)
+        brightness = mean/255
 
         if not self.training:
             annotatedFrame = np.copy(buf)
@@ -310,7 +327,10 @@ class OpenFaceServerProtocol(WebSocketServerProtocol):
                     elif len(self.people) == 1:
                         identity = 0
                     elif self.svm:
-                        identity = self.svm.predict(rep)[0]
+                        #identity = self.svm.predict(rep)[0]
+                        predictions = self.svm.predict(rep)
+                        identity = np.argmax(predictions)
+                        print(predictions[identity])
                     else:
                         print("hhh")
                         identity = -1
@@ -318,13 +338,14 @@ class OpenFaceServerProtocol(WebSocketServerProtocol):
                         identities.append(identity)
                 '''
                 #read model
+
                 rep = rep.reshape(1, -1)
-                print(rep.shape)
                 predictions = self.clf.predict_proba(rep).ravel()
                 maxI = np.argmax(predictions)
                 person = self.le.inverse_transform(maxI)
                 confidence = predictions[maxI]
                 print("Predict {} with {:.2f} confidence.".format(person, confidence))
+
             if not self.training:
                 bl = (bb.left(), bb.bottom())
                 tr = (bb.right(), bb.top())
@@ -340,17 +361,23 @@ class OpenFaceServerProtocol(WebSocketServerProtocol):
                     else:
                         name = "Unknown"
                 else:
-                    #name = self.people[identity]
+                    name = self.people[identity]
                 '''
                 # set threshold
+
                 if confidence < .89:
                     person = 'Unknown'
                 else:
-                    person = person + "{:.5f}".format(confidence)
+                    if person == 'test':
+                        person = person + "{:.5f}".format(confidence)
+                    else:
+                        person = 'Unknown'
                 cv2.putText(annotatedFrame, person, (bb.left(), bb.top() - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.75,
                             color=(152, 255, 204), thickness=2)
-
+                cv2.putText(annotatedFrame, "{:.3}".format(brightness), (30, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.75,
+                            color=(152, 255, 204), thickness=2)
         if not self.training:
             msg = {
                 "type": "IDENTITIES",
